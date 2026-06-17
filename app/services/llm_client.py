@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from dotenv import load_dotenv
 
@@ -11,9 +12,9 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
-def call_groq(messages, model=GROQ_MODEL, api_key=GROQ_API_KEY):
+def call_groq(messages, model=GROQ_MODEL, api_key=GROQ_API_KEY, retries=3):
     if not api_key:
-        raise ValueError("GROQ_API_KEY environment variable is not set. Please supply it or switch to Ollama.")
+        raise ValueError("GROQ_API_KEY is not set. Please add it in the LLM Config panel or your .env file.")
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -23,13 +24,28 @@ def call_groq(messages, model=GROQ_MODEL, api_key=GROQ_API_KEY):
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": 0.1
+        "temperature": 0.1,
+        "max_tokens": 1024
     }
     
-    response = requests.post(url, json=payload, headers=headers, timeout=30)
-    response.raise_for_status()
-    result = response.json()
-    return result["choices"][0]["message"]["content"]
+    for attempt in range(retries):
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 429:
+            # Rate limited — wait and retry with exponential backoff
+            wait = 2 ** attempt  # 1s, 2s, 4s
+            if attempt < retries - 1:
+                time.sleep(wait)
+                continue
+            else:
+                return (
+                    "⚠️ Groq API rate limit reached. You're sending requests too quickly on the free tier. "
+                    "Please wait 10–20 seconds and try again, or upgrade your Groq plan."
+                )
+        
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
 
 def call_ollama(messages, model=OLLAMA_MODEL, host=OLLAMA_HOST):
     url = f"{host.rstrip('/')}/api/chat"
@@ -84,5 +100,7 @@ def generate_answer(question: str, context: str, provider=None, model=None, api_
             return call_groq(messages, model=model or GROQ_MODEL, api_key=api_key or GROQ_API_KEY)
         else:
             return call_ollama(messages, model=model or OLLAMA_MODEL, host=host or OLLAMA_HOST)
+    except requests.exceptions.ConnectionError:
+        return f"⚠️ Could not connect to {provider}. Make sure the service is running."
     except Exception as e:
-        return f"Error calling LLM provider ({provider}): {str(e)}"
+        return f"⚠️ Error calling {provider}: {str(e)}"
