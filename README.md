@@ -53,7 +53,6 @@ python run.py
 ```
 
 - **FastAPI API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Streamlit Web UI**: [http://localhost:8501](http://localhost:8501)
 
 ---
 
