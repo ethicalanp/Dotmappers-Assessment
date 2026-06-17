@@ -1,11 +1,21 @@
 import os
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.core.data_loader import load_csv_data, get_csv_as_string
 from app.services.anomaly_detector import detect_anomalies
 from app.services.llm_client import generate_answer, LLM_PROVIDER
 
 app = FastAPI(title="CSV Support Ticket QA & Anomaly API", version="1.0.0")
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load CSV data into memory on startup
 CSV_DF = None
@@ -75,3 +85,6 @@ def anomalies():
         "total_anomalies": len(found_anomalies),
         "anomalies": found_anomalies
     }
+
+# Frontend is served by Vite dev server (http://localhost:5173)
+# For production, build the React app and serve the dist/ folder here.
